@@ -28,7 +28,7 @@ python -m ris_nlsim.experiments.exp_a_parity --quick --workers 12
 
 实验输出写在 `results/`、中间文件写在 `_scratch/`，两者都不进版本库。实验 F 需要实测数据表 `测试数据.xlsx`（不随仓库发布），用 `--xlsx` 指定路径。
 
-其余实验：`exp_f_hardware`（硬件对齐，先跑）、`exp_b_snr`、`exp_c_invariance`、`exp_d_feedback`、`exp_e_trainability`，以及训练器基准 `bench_trainers`。通用参数 `--quick / --workers / --seeds / --out`；A–E 另有 `--scenario {baseline,informative,informative_probe}`（D 保持 flat0 几何，只沿用其中的直达路径开关），A/B 有 `--dspsa-variant`、E 有 `--variant`。各自 `--help` 有完整选项。
+其余实验：`exp_f_hardware`（硬件对齐，先跑）、`exp_b_snr`、`exp_c_invariance`、`exp_d_feedback`、`exp_e_trainability`、`exp_g_phase_bits`（相位精度阶梯），以及训练器基准 `bench_trainers`。通用参数 `--quick / --workers / --seeds / --out`；A–E 另有 `--scenario {baseline,informative,informative_probe}`（D 保持 flat0 几何，只沿用其中的直达路径开关），A/B 有 `--dspsa-variant`、E 有 `--variant`。各自 `--help` 有完整选项。
 输出在 `results/<实验>/<时间戳>/`：`summary.md`（结论表）、`summary.csv`、`runs.jsonl`（逐 run 原始结果）、`config.json`、`*.png`。
 
 在 Python 里直接用：
@@ -71,7 +71,7 @@ print(res["eval"]["acc_clean"], res["eval"]["margin_db"])
 6. **源功率标定是开环的**：M2/M3/M4 = 接收波束对准馈源（量化共轭码本）时开环 PA 输入比 P1dB 低 10 / 等于 / 高 10 dB。训练后的码本会压掉入射偏置，**实际闭环工作点往往比名义值低 5–20 dB**，所有结果表都单列实测工作点；另有 `Rapp@+20` 等更高功率条件。
 7. **8 格定位**按 Song 2026 原文：一套码本、3 个探头各自阈值 → 3-bit 格号；留出集评估用训练集阈值。
 
-## 4. 初步结果（A/B/C/E 为 full + informative、5 个种子，D/F 为 `--quick`；详见 [results/RESULTS_SUMMARY.md](results/RESULTS_SUMMARY.md)）
+## 4. 初步结果（A/B/C/E/G 与 D、F 均为 full；详见 [results/RESULTS_SUMMARY.md](results/RESULTS_SUMMARY.md)）
 
 **两个场景**（`--scenario`，INTEGRATION §S）：`baseline` = L90，水球 λ/3 距接收板 0.5 m，馈源→探头直达保留；
 `informative` = 同几何但 ROI 拉近到 0.35 m、吸波屏挡住馈源→探头直达（实验 A/B 的 quick 默认；下面 A/B/C/E 的 full 结果都用它）。
@@ -82,7 +82,7 @@ print(res["eval"]["acc_clean"], res["eval"]["margin_db"])
   - 2 位 XOR：M0、M1、M1b@+25、M3、M4、Rapp@+20/+25/+30 全部可解（best 5/5 全对、连续相位 5/5 robust；1-bit accuracy oracle 单独 2–5/5），符合"二次型能做 XOR"。
   - 3 位奇偶（完全耦合、水）：**连续相位**下 Rapp@+20/+25/+30 分别 5/5、5/5、3/5 全对（robust ≥ 0.5 dB：1/5、4/5、2/5）；同功率线性 M1、Bussgang 增益匹配 M1b@+25、无源 M0、名义 M3 全部 0/5（最好 7/8）。
     **非线性收益（Rapp@+25 − M1b@+25，连续 oracle）：Δrobust = +0.80 [0.24, 1.00]，Δsolved = +1.00**，95% CI 不含 0 ⇒ 在这个场景里 PA 饱和本身提供了线性中继给不了的高阶项。intra（水、金属）与 full 金属三格 Δrobust 都是 +1.00 [1.00, 1.00]。
-  - **RQ2（full vs intra）**：物体之间不耦合的 intra（物体 W≥3(e) ≈ 1e-31）下 Rapp@+25 仍 5/5 robust；full 下物体 W≥3(e) ≈ 2e-4（金属 2.4e-4），线性 / 无源条件仍 0/5，Rapp 条件也不比 intra 好 ⇒ 判决量的高阶项来自 PA，本几何下物体多次散射既替代不了它，也没有互补收益（间距 0.35λ、介质 εr 块未跑）。
+  - **RQ2（full vs intra，含密排补充组）**：间距 λ/2 时物体多次散射很弱（W≥3(e) ≈ 2e-4），线性 / 无源条件 0/5，判决量的高阶项来自 PA。物体贴紧（间距 0.35λ）、εr = 10、4 块中继时线性中继也能勉强解出（M1b@+25 robust 4/5，裕量约 0.8 dB；饱和中继约 7 dB）；物体互不耦合（intra）时线性中继始终 0/5 ⇒ 强散射非线性可**部分替代** PA，PA 的额外收益随之变小（Δrobust 从 +1.0 降到 +0.2），未见互补。
   - **1-bit 码本在任何条件下都解不出 3 位奇偶**（含深度模拟退火搜索，最好 7/8）；连续解要求相位精度约 1–2°。⇒ 3 位奇偶检验需要多比特 / 模拟移相；1-bit 硬件上奇偶阶梯止于 XOR。
   - 名义 M3/M4（聚焦码本标定）在训练后码本下实际工作在线性区（训练会把入射偏置零陷 20–28 dB）；有判别力的窗口是聚焦标定之上 +20…+30 dB。
 - **训练器（RQ6，bench_trainers）**：旧 DSPSA 子集变体在分类任务上停在 τ·ln2 平台（chance 归一化得分 −0.01），根因是 a='auto' 步长两头失配 + softplus 损失奖励 y₁≈y₂ 塌缩；新默认 `sign_acc` 0.90（35/50 达标），ILS 约 0.95（3000 次测量）。faithful DSPSA 在 1-bit 上退化（ĝ 只剩测量噪声），数值确认。
@@ -90,7 +90,8 @@ print(res["eval"]["acc_clean"], res["eval"]["margin_db"])
 - **实验 B（RQ3，informative full）**：2 位 XOR 达到 90% 准确率所需 SNR：连续码本约 2 dB（M1、M3、Rapp@+25 相近），1-bit oracle 码本约 18–21 dB（逐种子均值），噪声下训练的 DSPSA（4000 次）约 22–31 dB。3 位奇偶只有 Rapp@+25 的连续码本能达到（所需约 15 dB，5/5 种子）。同一 SNR 下 Rapp@+25 相对 M1 的准确率差：−20…0 dB 时约 0，10 dB 时 +0.14，20 dB 时 +0.35，30 dB 时 +0.48（相对 M1b@+25：+0.14/+0.34/+0.43）。字母任务（金属）上 Rapp@+25 − M1 在 10 dB 有 +0.20（1-bit oracle 码本），但相对 M1b@+25 只有 −0.03，是增益效应。即低 SNR 下增益主导、各条件无差别，非线性收益只在高 SNR、且只在需要高阶项的任务上出现，与 RQ3 假设一致。
 - **实验 F（硬件对齐）**：开环预测下，"收00-发00"与实测增益提升（约 25 dB）吻合需 PA 小信号增益约 29 dB（净 24 dB）；默认 κ₀（−30 dB/90°）时 17/17 非共面配置落在 ±3 dB 内，但依赖未测的 κ₀ 相位（0° 时只有 2/17）。共面配置实测比仿真多掉 6–9 dB，模型解释不了（多半是共面时馈源泄漏到发射阵、隔离变差）。
 - **实验 C（RQ4，informative full，5 个种子）**：**仍不足以下结论，只有定位一侧有弱支持**。32 项配对检验 4 项显著：Rapp@+20 定位无抖动 oracle −0.17 [−0.26, −0.09]、距离抖动 DSPSA −0.17 [−0.28, −0.07]（饱和压掉幅度 → 定位更差），功率抖动 oracle +0.13 [+0.04, +0.23]（AGC 帮助固定阈值定位）；字母 DSPSA Rapp@+20 双抖动 +0.07 [+0.01, +0.14] 与"饱和更不变"相反。字母接近天花板（acc 0.88–1.00），名义 M4 训练后基本不饱和（字母 sat ≤ 0.2），形状识别一侧的 AGC 假设没有被检验到。
-- **实验 D（RQ5，quick）**：环路增益 −3 → −1 dB 时判决量对物体的灵敏度随 κ₀ 相位在 0.7–2.3 dB 间变化；+1 dB 以上线性中继全部自激，Rapp 中继在部分相位下被饱和锁定为稳定态。
+- **实验 D（RQ5，full）**：环路小信号增益超过 1 时，线性中继全部自激；饱和中继的自激比例显著更低（M3 −0.47 [−0.66, −0.28]，M4 −0.80 [−0.95, −0.65]，相位稳健判据下仍显著）⇒ PA 饱和能把环路钳住。但"接近谐振时类间距变大"没有看到（Spearman ρ 在 −0.2 到 +0.1 之间）。
+- **实验 G（相位精度阶梯，新增）**：informative 场景、3 位奇偶、5 个种子，把连续解量化到 L 电平再精修：饱和中继 Rapp@+25 在 1/2/3/4/5 bit 时分别解出 0/0/1/4/5 个（物体完全耦合），线性对照 M1、M1b@+25 在任何精度下都是 0/5。静态相位误差 1° 时仍有 65–88% 可用，2° 时 35–58%，5° 时不到 10%。⇒ 3 位奇偶检验需要 ≥ 4-bit 移相器（或矢量调制器）与约 1° 的相位稳定度。运行：`python -m ris_nlsim.experiments.exp_g_phase_bits`。
 
 ## 5. 相关工作与新颖性边界
 

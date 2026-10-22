@@ -1,0 +1,18 @@
+# 运行产物与中间文件（体积大，且含本机路径）
+_scratch/
+results/*
+!results/RESULTS_SUMMARY.md
+__pycache__/
+*.pyc
+.pytest_cache/
+*.log
+
+# 实验方案原文与实测数据不随仓库发布
+方案_v0.md
+*.xlsx
+*.pdf
+*.pptx
+
+# 环境
+.venv/
+.env
